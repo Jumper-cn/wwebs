@@ -28,7 +28,6 @@
 		<module>framework</module>
 		<module>modules</module>
 		<module>admin</module>
-		<module>wechat</module>
 	</modules>
 
 	<properties>
