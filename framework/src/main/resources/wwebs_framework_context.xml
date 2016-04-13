@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+			http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+			http://www.springframework.org/schema/context 
+			http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+	<!-- 扫描类包，应用spring注解 -->
+	<context:component-scan base-package="com.jumper.wwebs.framework" />
+
+	<!-- 加载配置文件 -->
+	<context:property-placeholder location="classpath:log4j.properties" ignore-unresolvable="true"/>
+	<context:property-placeholder location="classpath:mysql.properties" ignore-unresolvable="true"/>
+	<context:property-placeholder location="classpath:redis.properties" ignore-unresolvable="true"/>
+	<context:property-placeholder location="classpath:qiniu.properties" ignore-unresolvable="true"/>
+	<context:property-placeholder location="classpath:sms.properties" ignore-unresolvable="true"/>
+
+	<!-- 数据源 -->
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource"
+		destroy-method="close" p:driverClassName="${db.dirverClass}" p:url="${db.url}"
+		p:username="${db.username}" p:password="${db.password}" />
+
+	<!-- jdbc模板 -->
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate"
+		p:dataSource-ref="dataSource" />
+
+	<!-- hibernate模板 -->
+	<bean id="sessionFactory"
+		class="org.springframework.orm.hibernate3.LocalSessionFactoryBean">
+		<property name="dataSource">
+			<ref bean="dataSource" />
+		</property>
+
+		<property name="hibernateProperties">
+			<props>
+				<!-- JDBC 连接池设置 -->
+				<prop key="connection.pool_size">1</prop>
+				<!-- SQL 方言适配器设置 -->
+				<!--<prop key="hibernate.dialect">org.hibernate.dialect.MySQLInnoDBDialect</prop> -->
+				<prop key="hibernate.dialect">com.jumper.wwebs.framework.base.dao.mysql.AppInnoDBSQLDialect
+				</prop>
+				<!-- 打印sql语句到控制台 -->
+				<prop key="hibernate.show_sql">true</prop>
+				<!-- 对打印的Sql语句进行格式化 -->
+				<prop key="hibernate.format_sql">true</prop>
+				<prop key="hibernate.connection.autocommit">true</prop>
+			</props>
+		</property>
+
+		<property name="mappingLocations">
+			<list>
+				<value>classpath*:/com/jumper/wwebs/**/po/*.hbm.xml</value>
+			</list>
+		</property>
+
+		<!-- <property name="mappingJarLocations"> <list> <value>classpath*:/ucenter.jar</value> 
+			</list> </property> -->
+	</bean>
+
+	<bean id="hibernateTemplate" class="org.springframework.orm.hibernate3.HibernateTemplate">
+		<property name="sessionFactory" ref="sessionFactory"></property>
+
+	</bean>
+
+	<!-- redis 配置 -->
+	<bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig">
+		<property name="maxIdle" value="${redis.maxIdle}" />
+		<property name="maxTotal" value="${redis.maxActive}" />
+		<property name="maxWaitMillis" value="${redis.maxWait}" />
+		<property name="testOnBorrow" value="${redis.testOnBorrow}" />
+	</bean>
+
+	<bean id="connectionFactory"
+		class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory"
+		p:host-name="${redis.host}" p:port="${redis.port}" p:password="${redis.pass}"
+		p:pool-config-ref="poolConfig" />
+
+	<bean id="redisTemplate" class="org.springframework.data.redis.core.StringRedisTemplate">
+		<property name="connectionFactory" ref="connectionFactory" />
+	</bean>
+
+	<!-- http client 配置 -->
+	<bean id="requestConfigBuilder" class="org.apache.http.client.config.RequestConfig"
+		factory-method="custom">
+		<property name="socketTimeout" value="60000" />
+		<property name="connectTimeout" value="30000" />
+	</bean>
+
+	<bean id="requestConfig" factory-bean="requestConfigBuilder"
+		factory-method="build" />
+
+	<bean id="connectionManager"
+		class="org.apache.http.impl.conn.PoolingHttpClientConnectionManager">
+		<property name="maxTotal" value="10" />
+		<property name="defaultMaxPerRoute" value="10" />
+
+	</bean>
+
+	<bean id="httpClientBuilder" class="org.apache.http.impl.client.HttpClients"
+		factory-method="custom">
+		<property name="connectionManager" ref="connectionManager" />
+		<property name="defaultRequestConfig" ref="requestConfig" />
+	</bean>
+
+	<bean id="httpClient" factory-bean="httpClientBuilder"
+		factory-method="build" destroy-method="close">
+	</bean>
+	<bean id="restTemplate" class="org.springframework.web.client.RestTemplate">
+		<constructor-arg>
+			<bean
+				class="org.springframework.http.client.HttpComponentsClientHttpRequestFactory">
+				<constructor-arg ref="httpClient" />
+			</bean>
+		</constructor-arg>
+	</bean>
+	
+	<!-- 七牛配置参数注入 -->
+	<bean id="qiniuUtil" class="com.jumper.wwebs.framework.utils.QiniuUtil">
+		<property name="accessKey" value="${qiniu.accessKey}" />
+		<property name="secertKey" value="${qiniu.secretKey}" />
+		<property name="bucketWebsite" value="${qiniu.bucketWebsite}" />
+		<property name="bucketTest" value="${qiniu.bucketTest}" />
+		<property name="expiresTime" value="${qiniu.expiresTime}" />
+		<property name="validTime" value="${qiniu.validTime}" />
+		<property name="environment" value="${qiniu.environment}" />
+	</bean>
+
+	<!-- 短信平台配置参数注入 -->
+	<bean id="smsUtil" class="com.jumper.wwebs.framework.utils.SMSUtil">
+		<property name="smsConfig">
+			<map>
+				<entry key="serverIP">
+					<value>${sms.server.ip}</value>
+				</entry>
+				<entry key="serverPort">
+					<value>${sms.server.port}</value>
+				</entry>
+				<entry key="accountSid">
+					<value>${sms.account.sid}</value>
+				</entry>
+				<entry key="accountToken">
+					<value>${sms.account.token}</value>
+				</entry>
+				<entry key="appId">
+					<value>${sms.appid}</value>
+				</entry>
+			</map>
+		</property>
+	</bean>
+</beans>
